@@ -42,11 +42,6 @@ export default defineConfig(({ mode }) => {
             if (id.includes("node_modules")) {
               if (id.includes("fabric")) {
                 return "lib.2.fabric";
-              } else if (
-                id.includes("@capacitor/filesystem") ||
-                id.includes("@capacitor/share")
-              ) {
-                return "lib.2.cap";
               } else if (id.includes("@mnlphlp/plugin-blec") || id.includes("@tauri-apps/api")) {
                 return "lib.2.tauri";
               } else if (id.includes("zod")) {

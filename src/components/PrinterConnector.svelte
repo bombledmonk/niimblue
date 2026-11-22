@@ -33,7 +33,7 @@
   import { platformTransports, connectPlatformClient, webTransportsEnabled } from "$platform";
 
   let connectionType = $state<ConnectionType>("bluetooth");
-  let featureSupport = $state<AvailableTransports>({ webBluetooth: false, webSerial: false, capacitorBle: false });
+  let featureSupport = $state<AvailableTransports>({ webBluetooth: false, webSerial: false, capacitorBle: false }); // niimbluelib still reports this flag; it is always false in Tauri/web builds
   let verboseInfoShow = $state<boolean>(false);
 
   const percentage = (cur?: number, total?: number) => {
@@ -88,8 +88,6 @@
         return webTransportsEnabled && featureSupport.webBluetooth;
       case "serial":
         return webTransportsEnabled && featureSupport.webSerial;
-      case "capacitor-ble":
-        return webTransportsEnabled && featureSupport.capacitorBle;
       default:
         return platformTransports.some((transport) => transport.type === type);
     }
@@ -98,7 +96,6 @@
   const fallbackConnectionType = (): ConnectionType => {
     if (webTransportsEnabled) {
       if (featureSupport.webBluetooth) return "bluetooth";
-      if (featureSupport.capacitorBle) return "capacitor-ble";
       if (featureSupport.webSerial) return "serial";
     }
 
@@ -138,7 +135,7 @@
 
     if (
       $automation?.autoConnect &&
-      (connectionType === "capacitor-ble" || platformTransports.some((t) => t.type === connectionType))
+      platformTransports.some((t) => t.type === connectionType)
     ) {
       void onConnectClicked();
     }
@@ -337,15 +334,6 @@
         {$tr("connector.serial")}
       </button>
     {/if}
-    {#if webTransportsEnabled && featureSupport.capacitorBle}
-      <button
-        disabled={$connectionState === "connecting"}
-        class="btn text-nowrap {connectionType === 'capacitor-ble' ? 'btn-light' : 'btn-outline-secondary'}"
-        onclick={() => switchConnectionType((connectionType = "capacitor-ble"))}>
-        <MdIcon icon="usb" />
-        Capacitor BLE
-      </button>
-    {/if}
     {#each platformTransports as transport (transport.type)}
       <button
         disabled={$connectionState === "connecting"}
@@ -361,8 +349,7 @@
     <button
       class="btn btn-primary"
       disabled={$connectionState === "connecting" ||
-        (!featureSupport.capacitorBle &&
-          !featureSupport.webBluetooth &&
+        (!featureSupport.webBluetooth &&
           !featureSupport.webSerial &&
           platformTransports.length === 0)}
       onclick={onConnectClicked}>

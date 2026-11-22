@@ -34,7 +34,7 @@ Give thanks:
 * Rich label editor. Label saving, import/export.
 * Print preview. You can see how your label will look like after post-processing. Several post-processing algorithms are available.
 * [Standalone apps](https://github.com/MultiMote/niimblue/releases):
-    - Android (Capacitor based)
+    - Android (Tauri based, native Bluetooth)
     - Windows and Linux (Tauri based, native Bluetooth)
 * Most complete implementation of [NIIMBOT protocol](https://printers.niim.blue/interfacing/proto/).
 

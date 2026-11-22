@@ -299,7 +299,7 @@ export class LocalStoragePersistence {
     const value = localStorage.getItem("connection_type");
     if (
       value === null ||
-      !["bluetooth", "serial", "capacitor-ble", "platform-ble", "platform-serial"].includes(value)
+      !["bluetooth", "serial", "platform-ble", "platform-serial"].includes(value)
     ) {
       return null;
     }

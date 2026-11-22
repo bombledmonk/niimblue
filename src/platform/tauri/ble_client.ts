@@ -35,7 +35,7 @@ const findSuitableCharacteristic = (
   services: BleService[],
 ): { service: string; characteristic: string } | undefined => {
   for (const service of services) {
-    // Same heuristic as the Web Bluetooth and Capacitor clients.
+    // Same heuristic as the Web Bluetooth client.
     if (service.uuid.length < 5) {
       continue;
     }
