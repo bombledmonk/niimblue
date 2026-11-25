@@ -1,7 +1,7 @@
 <script lang="ts">
   import Dropdown from "bootstrap/js/dist/dropdown";
   import * as fabric from "fabric";
-  import { onDestroy, onMount, tick } from "svelte";
+  import { onDestroy, onMount, tick, untrack } from "svelte";
   import { ArUcoMarker } from "$/fabric-object/aruco";
   import { Barcode } from "$/fabric-object/barcode";
   import { QRCode } from "$/fabric-object/qrcode";
@@ -40,7 +40,7 @@
   import { CanvasUtils } from "$/utils/canvas_utils";
   import { appConfirm } from "$/stores/confirm";
   import HaLibraryMenu from "$/components/dialogs/HaLibraryMenu.svelte";
-  import { haMode } from "$/utils/ha_bridge";
+  import { haMode, haPrinters, haSelectedPrinterId, takeNewRollLabelProps } from "$/utils/ha_bridge";
 
   type DialogName =
     | "none"
@@ -182,6 +182,19 @@
       Toasts.zodErrors(e, "Label parameters save error:");
     }
   };
+
+  // In Home Assistant, size the label to a newly loaded roll (HA knows it from the roll's RFID tag).
+  $effect(() => {
+    if (!haMode || fabricCanvas === undefined) {
+      return;
+    }
+    const printer = $haPrinters.find((p) => p.deviceId === $haSelectedPrinterId);
+    const roll = takeNewRollLabelProps(printer);
+    if (roll !== undefined) {
+      untrack(() => onUpdateLabelProps({ ...labelProps, ...roll }));
+      Toasts.message(`Label size set to the loaded roll (${printer?.labelInfo})`);
+    }
+  });
 
   const updateDimensions = (width: number, height: number) => {
     let newProps = { ...labelProps, size: { width, height } };

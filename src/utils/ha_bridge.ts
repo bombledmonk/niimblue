@@ -9,7 +9,7 @@
 import { getPrinterMetaByModel, type PrintDirection, type PrinterModel, type PrinterModelMeta } from "@mmote/niimbluelib";
 import { get, writable } from "svelte/store";
 import { printerMeta } from "$/stores/app";
-import type { ExportedLabelTemplate } from "$/types";
+import type { ExportedLabelTemplate, LabelProps } from "$/types";
 
 interface HassEntity {
   entity_id: string;
@@ -130,24 +130,66 @@ export const HaApi = {
 };
 
 /**
- * hass-niimbot rotates counter-clockwise (PIL). NiimBlue's "left" print direction means the
- * left edge of the design is printed first, i.e. the image turned 90 degrees clockwise.
+ * hass-niimbot (imagespec) rotates clockwise, and the first bitmap row leaves the printer first.
+ * NiimBlue's "left" print direction means the left edge of the design is printed first, i.e. the
+ * image turned 90 degrees clockwise. Checked on a D110_M: 270 puts the right edge out first.
  */
-export const haRotation = (direction: PrintDirection): number => (direction === "left" ? 270 : 0);
+export const haRotation = (direction: PrintDirection): number => (direction === "left" ? 90 : 0);
 
-/** A readable name for history: the template title, else the first text on the label. */
-export const guessLabelName = (tpl?: ExportedLabelTemplate): string | undefined => {
+/** Icon fonts (Material Icons etc.) draw from the Private Use Area; those glyphs make no name. */
+const ICON_GLYPHS = /[-]/g;
+
+/** A readable name for history: the template title, else the first text on the label, else the time. */
+export const guessLabelName = (tpl?: ExportedLabelTemplate): string => {
   if (tpl?.title?.trim()) {
     return tpl.title.trim();
   }
   const objects = (tpl?.canvas as { objects?: { text?: unknown }[] } | undefined)?.objects ?? [];
   for (const o of objects) {
-    if (typeof o.text === "string" && o.text.trim()) {
-      return o.text.trim().replace(/\s+/g, " ").slice(0, 60);
+    const text = typeof o.text === "string" ? o.text.replace(ICON_GLYPHS, "").replace(/\s+/g, " ").trim() : "";
+    if (text) {
+      return text.slice(0, 60);
     }
   }
-  return undefined;
+  return `Label ${new Date().toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`;
 };
+
+const APPLIED_ROLL_KEY = "ha_applied_roll";
+
+/**
+ * Label size for the roll in the printer, from hass-niimbot's catalogue info: "T12*40-70WHITE"
+ * is 12 mm across the print head and 40 mm long. Returns it only the first time a roll is seen
+ * (per browser), so a size the user picks afterwards is kept until the roll changes.
+ */
+export const takeNewRollLabelProps = (printer?: HaPrinter): Pick<LabelProps, "printDirection" | "size"> | undefined => {
+  const match = printer?.labelInfo?.match(/(\d+(?:\.\d+)?)\s*\*\s*(\d+(?:\.\d+)?)/);
+  const meta = printer?.meta;
+  if (!match || !meta) {
+    return undefined;
+  }
+  const rollKey = `${printer!.deviceId}:${match[0]}`;
+  try {
+    if (localStorage.getItem(APPLIED_ROLL_KEY) === rollKey) {
+      return undefined;
+    }
+    localStorage.setItem(APPLIED_ROLL_KEY, rollKey);
+  } catch {
+    // No storage: apply once per page load at most.
+    if (appliedRollThisLoad === rollKey) {
+      return undefined;
+    }
+  }
+  appliedRollThisLoad = rollKey;
+
+  const dotsPerMm = meta.dpi / 25.4;
+  const across = Math.min(Math.round(parseFloat(match[1]) * dotsPerMm), meta.printheadPixels);
+  const along = Math.round(parseFloat(match[2]) * dotsPerMm);
+  return meta.printDirection === "left"
+    ? { printDirection: "left", size: { width: along, height: across } }
+    : { printDirection: "top", size: { width: across, height: along } };
+};
+
+let appliedRollThisLoad: string | undefined;
 
 const readPrinters = (hass: Hass): HaPrinter[] => {
   const byDevice = new Map<string, string[]>();
