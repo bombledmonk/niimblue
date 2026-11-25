@@ -8,6 +8,8 @@
   import MdIcon from "$/components/basic/MdIcon.svelte";
   import AppPrompt from "$/components/dialogs/AppPrompt.svelte";
   import AppConfirm from "./dialogs/AppConfirm.svelte";
+  import HaPrinterStatus from "$/components/HaPrinterStatus.svelte";
+  import { haMode } from "$/utils/ha_bridge";
 
   // eslint-disable-next-line no-undef
   const appCommit = __APP_COMMIT__;
@@ -30,14 +32,20 @@
         </h1>
       </div>
       <div class="col-md-3">
-        <PrinterConnector />
+        {#if haMode}
+          <HaPrinterStatus />
+        {:else}
+          <PrinterConnector />
+        {/if}
       </div>
     </div>
-    <div class="row">
-      <div class="col">
-        <BrowserWarning />
+    {#if !haMode}
+      <div class="row">
+        <div class="col">
+          <BrowserWarning />
+        </div>
       </div>
-    </div>
+    {/if}
 
     <div class="row">
       <div class="col">

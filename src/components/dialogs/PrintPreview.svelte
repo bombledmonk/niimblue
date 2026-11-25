@@ -28,17 +28,22 @@
   import { CustomCanvas } from "$/fabric-object/custom_canvas";
   import { FileUtils } from "$/utils/file_utils";
   import AppModal from "$/components/basic/AppModal.svelte";
+  import type { ExportedLabelTemplate } from "$/types";
+  import { HaApi, guessLabelName, haMode, haRotation, haSelectedPrinterId } from "$/utils/ha_bridge";
 
   interface Props {
     labelProps: LabelProps;
     canvasCallback: () => FabricJson;
+    /** Full editable label, stored with each print in Home Assistant's history. */
+    designCallback?: () => ExportedLabelTemplate;
     onClose?: () => void;
     printNow?: boolean;
     csvData: string;
     csvEnabled: boolean;
   }
 
-  let { labelProps, canvasCallback, printNow = false, csvData, csvEnabled, onClose }: Props = $props();
+  let { labelProps, canvasCallback, designCallback, printNow = false, csvData, csvEnabled, onClose }: Props =
+    $props();
 
   let previewCanvas: HTMLCanvasElement;
   let printState = $state<"idle" | "printing">("idle");
@@ -81,7 +86,8 @@
 
   let modalRef: AppModal;
 
-  const disconnected = derived(connectionState, ($connectionState) => $connectionState !== "connected");
+  // In Home Assistant the printer is reached through HA, never through a local connection.
+  const disconnected = derived(connectionState, ($connectionState) => !haMode && $connectionState !== "connected");
 
   const labelTypeTranslationKey = (labelType: string): TranslationKey =>
     `preview.label_type.${labelType}` as TranslationKey;
@@ -89,7 +95,7 @@
   const endPrint = async () => {
     clearInterval(statusTimer);
 
-    if (!$disconnected && printState !== "idle") {
+    if (!haMode && !$disconnected && printState !== "idle") {
       if (currentPrintTask !== undefined) {
         await currentPrintTask.printEnd();
       } else {
@@ -116,7 +122,50 @@
     FileUtils.printImageUrls(sources);
   };
 
+  /** Print through Home Assistant: each page goes as a finished 1-bit PNG, HA owns Bluetooth. */
+  const onPrintHa = async () => {
+    printState = "printing";
+    error = "";
+    printProgress = { progressType: "send", percents: 0 };
+
+    const design = designCallback?.();
+    const name = guessLabelName(design);
+
+    try {
+      for (let pageIdx = 0; pageIdx < pagesTotal; pageIdx++) {
+        currentPage = pageIdx;
+        await generatePreviewData(currentPage);
+        await HaApi.print({
+          png: previewCanvas.toDataURL("image/png"),
+          width: previewCanvas.width,
+          height: previewCanvas.height,
+          rotate: haRotation(labelProps.printDirection),
+          density: params.density,
+          label_type: params.labelType,
+          copies: params.quantity,
+          name: pagesTotal > 1 && name ? `${name} (${pageIdx + 1}/${pagesTotal})` : name,
+          design,
+          device_id: $haSelectedPrinterId,
+        });
+        printProgress = { progressType: "print", percents: Math.round(((pageIdx + 1) / pagesTotal) * 100) };
+      }
+    } catch (e) {
+      error = e instanceof Error ? e.message : `${e}`;
+      console.error(e);
+    }
+
+    printState = "idle";
+
+    if (printNow && !error) {
+      modalRef.hide();
+    }
+  };
+
   const onPrint = async () => {
+    if (haMode) {
+      return onPrintHa();
+    }
+
     printState = "printing";
     error = "";
 
@@ -803,7 +852,7 @@
         onClick={toggleSavedProp} />
     </div>
 
-    {#if params.printTaskName === "D110M_V4"}
+    {#if !haMode && params.printTaskName === "D110M_V4"}
       <div class="input-group flex-nowrap input-group-sm">
         <span class="input-group-text">{$tr("preview.speed")}</span>
         <select
@@ -845,7 +894,7 @@
         onClick={toggleSavedProp} />
     </div>
 
-    <div class="input-group input-group-sm">
+    <div class="input-group input-group-sm" class:d-none={haMode}>
       <span class="input-group-text">{$tr("preview.print_task")}</span>
       <select
         class="form-select"
@@ -903,7 +952,7 @@
 
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{$tr("preview.close")}</button>
 
-    {#if printState !== "idle"}
+    {#if !haMode && printState !== "idle"}
       <button type="button" class="btn btn-primary" disabled={$disconnected} onclick={endPrint}>
         {$tr("preview.print.cancel")}
       </button>
@@ -920,6 +969,8 @@
     <button type="button" class="btn btn-primary" disabled={$disconnected || printState !== "idle"} onclick={onPrint}>
       {#if $disconnected}
         {$tr("preview.not_connected")}
+      {:else if haMode}
+        <MdIcon icon="home" /> {$tr("preview.print")}
       {:else}
         <MdIcon icon="print" /> {$tr("preview.print")}
       {/if}

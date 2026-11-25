@@ -39,8 +39,18 @@
   import VectorParamsControls from "$/components/designer-controls/VectorParamsControls.svelte";
   import { CanvasUtils } from "$/utils/canvas_utils";
   import { appConfirm } from "$/stores/confirm";
+  import HaLibraryMenu from "$/components/dialogs/HaLibraryMenu.svelte";
+  import { haMode } from "$/utils/ha_bridge";
 
-  type DialogName = "none" | "preview" | "label_props" | "saved_labels" | "csv_props" | "icon_picker" | "object_picker";
+  type DialogName =
+    | "none"
+    | "preview"
+    | "label_props"
+    | "saved_labels"
+    | "ha_library"
+    | "csv_props"
+    | "icon_picker"
+    | "object_picker";
 
   let htmlCanvas: HTMLCanvasElement;
   let currentDialog = $state<DialogName>("none");
@@ -556,6 +566,15 @@
           <MdIcon icon="sd_storage" />
         </button>
 
+        {#if haMode}
+          <button
+            class="btn btn-sm btn-secondary"
+            title="Home Assistant label library (history and saved designs)"
+            onclick={() => (currentDialog = "ha_library")}>
+            <MdIcon icon="history" />
+          </button>
+        {/if}
+
         <button
           class="btn btn-sm btn-secondary"
           disabled={undoState.undoDisabled}
@@ -614,7 +633,7 @@
           title="Print with default or saved parameters"
           class="btn btn-sm btn-primary ms-1"
           onclick={openPreviewAndPrint}
-          disabled={$connectionState !== "connected"}><MdIcon icon="print" /> {$tr("editor.print")}</button>
+          disabled={!haMode && $connectionState !== "connected"}><MdIcon icon="print" /> {$tr("editor.print")}</button>
       </div>
     </div>
   </div>
@@ -669,6 +688,7 @@
     <PrintPreview
       onClose={() => (currentDialog = "none")}
       canvasCallback={getCanvasForPreview}
+      designCallback={exportCurrentLabel}
       {labelProps}
       {printNow}
       {csvEnabled}
@@ -683,6 +703,12 @@
       onRequestLabelTemplate={exportCurrentLabel}
       {onLoadRequested}
       {csvEnabled}
+      {hasUnsavedChanges} />
+  {:else if currentDialog === "ha_library"}
+    <HaLibraryMenu
+      onClose={() => (currentDialog = "none")}
+      onRequestLabelTemplate={exportCurrentLabel}
+      {onLoadRequested}
       {hasUnsavedChanges} />
   {:else if currentDialog === "csv_props"}
     <CsvControl
